@@ -1,0 +1,6 @@
+Revision history for Perl extension SNMP::Trapinfo
+
+0.8  Mon Mar  6 15:56:43 2006
+	- original version; created by h2xs 1.23 with options
+		-X -n SNMP::Trapinfo
+
