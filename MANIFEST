@@ -4,3 +4,4 @@ MANIFEST
 README
 t/SNMP-Trapinfo.t
 lib/SNMP/Trapinfo.pm
+META.yml                                 Module meta-data (added by MakeMaker)

@@ -1,5 +1,5 @@
-SNMP-Trapinfo version 0.8
-===========================
+SNMP-Trapinfo 
+=============
 
 This module allows the user to get to the useful parts of an snmptrapd 
 packet. This assumes that you are using the Net-SNMP package from 

@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 24;
+use Test::More tests => 25;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -56,7 +56,7 @@ cmp_ok( $@, 'ne',"", "Complain if no parameters specified for new()");
 
 my $data = <<EOF;
 cisco9999.lon.altinity
-192.168.10.21
+UDP: [192.168.10.21]:3656
 SNMPv2-MIB::sysUpTime.0 75:22:57:17.87
 SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkDown
 IF-MIB::ifIndex.24 24
@@ -72,6 +72,7 @@ like( $@, '/Bad ref/', "Complain if bad parameters for new()");
 $trap = SNMP::Trapinfo->new(\$data);
 cmp_ok( $trap->hostip, 'eq', "192.168.10.21", "Host ip correct");
 cmp_ok( $trap->trapname, 'eq', "IF-MIB::linkDown", "trapname correct");
+cmp_ok( $trap->expand('This IP is ${HOSTIP}'), 'eq', 'This IP is 192.168.10.21', '${HOSTIP} expands correctly');
 cmp_ok( $trap->fully_translated, '==', 1, "Trapname is fully translated");
 cmp_ok( $trap->data->{"IF-MIB::ifDescr"}, "eq", "FastEthernet0/24", "Got interface description");
 
@@ -84,6 +85,6 @@ cmp_ok( $_, "eq", 'Received IF-MIB::linkDown: IF-MIB::ifDescr=FastEthernet0/24 I
 
 cmp_ok($trap->expand('Interface ${V5} is down'), "eq", 'Interface 24 is down', 'Expansion of ${V5} correct');
 cmp_ok($trap->expand('Extra data: ${P7} = ${V7}'), "eq", 'Extra data: ifType = ethernetCsmacd', 'Expansion of ${P7} and ${V7} correct');
-cmp_ok($trap->expand('IP: ${P2}'), 'eq', 'IP: 192.168.10.21', '${P2} works');
+cmp_ok($trap->expand('IP: ${P2}'), 'eq', 'IP: UDP: [192.168.10.21]:3656', '${P2} works');
 cmp_ok($trap->expand('Bad - ${P}'), 'eq', 'Bad - (null)', '${P} without a number caught correctly');
 

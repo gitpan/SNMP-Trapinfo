@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.8';
+our $VERSION = '0.8.1';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -52,6 +52,8 @@ sub expand {
 			$newval = join(" ", map {"$_=".$self->data->{$_}} (sort keys %h) );
 		} elsif ($key eq "TRAPNAME") {
 			$newval = $self->trapname;
+		} elsif ($key eq "HOSTIP") {
+			$newval = $self->hostip;
 		} else {
 			$newval = $self->data->{$key} || "(null)";
 		}
@@ -84,9 +86,14 @@ sub read {
 		croak "Bad ref";
 	}
 	my @packet = split("\n", $self->{packet});
-	chomp($_ = $packet[0]);
+	chomp($_ = shift @packet);
 	$self->hostname($_);
-	chomp($_ = $packet[1]);
+	chomp($_ = shift @packet);
+
+	# Extra stuff around the IP packet in Net-SNMP 5.2.1
+	s/^.*\[//;
+	s/\].*$//;
+
 	$self->hostip($_);
 	foreach $_ (@packet) {
 		my ($key, $value) = /^([^ ]+) (.+)$/;
@@ -113,6 +120,10 @@ sub _get_line {
 	$line--;	# Index begins with 1
 	my @packet = split("\n", $self->{packet});
 	$_ = $packet[$line];
+	# Return complete line if requesting P1 or P2
+	if ($line == 0 or $line == 1) {
+		return ($_, undef);
+	}
 	my ($key, undef, $value) = /^([^ ]+)( (.+))?$/;
 	$key = $self->cleanup_string($key);
 	$value = $self->cleanup_string($value) if $value;
@@ -192,8 +203,8 @@ resolved by snmptrapd.
 
 =item hostip
 
-Returns the 2nd line of the packet, which should be the ip address
-of the originating packet.
+Returns the IP address in the 2nd line of the packet, which should be the 
+originating host.
 
 =item trapname
 
@@ -243,6 +254,10 @@ ${Vx} - Returns the value for line x
 =item *
 
 ${TRAPNAME} - Returns the trapname (as called from $trap->trapname)
+
+=item *
+
+${HOSTIP} - Returns the IP of the originating packet
 
 =item *
 
