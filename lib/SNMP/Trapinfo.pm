@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.8.1';
+our $VERSION = '0.8.2';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -34,7 +34,7 @@ sub new {
 sub trapname {
 	my $self = shift;
 	my $trapname = $self->data->{"SNMPv2-MIB::snmpTrapOID"};
-	return $trapname;
+	return $trapname || undef;
 }
 
 sub expand {
@@ -155,21 +155,54 @@ SNMP::Trapinfo - Reading an SNMP trap from Net-SNMP's snmptrapd
   use SNMP::Trapinfo;
   $trap = SNMP::Trapinfo->new(*STDIN);
 
-  print "From host: ", $trap->hostname, $/;
-  print "Trapname: ", $trap->trapname, $/;
-  print "Packet: ", $trap->packet, $/;
-  print "Message: ", $trap->expand('Interface ${V5} is down'), $/;
+  open F, ">> /tmp/trap.log";
+  print F $trap->packet;
+  close F;
+
+  if (! defined $trap->trapname) {
+    die "No trapname in packet";
+  } elsif ($trap->trapname eq "IF-MIB::linkUp" or $trap->trapname eq "IF-MIB::linkDown") {
+    # $mailer is a Mail::Mailer object, for example
+    print $mailer "Received trap :", $trap->trapname, $/,
+      "From host: ", $trap->hostname, $/,
+      "Message: ", $trap->expand('Interface ${V5} received ${TRAPNAME}'), $/;
+  } else {
+    # not expected trap
+  }
 
 =head1 DESCRIPTION
 
 This module allows the user to get to the useful parts of an snmptrapd
-packet. This assumes that you are using the Net-SNMP package from
-http://www.net-snmp.org and that you are letting snmptrapd do all the
-OID translations (no -On option for snmptrapd) and that hostnames are resolved
-itself (no -n option).
+packet, as provided by the Net-SNMP software (http://www.net-snmp.org). 
+You can then take whatever action with the packet, such as sending
+an email, post an IM or passing it to Nagios (http://www.nagios.org).
 
 The most useful method is expand, which evaluates macros based on the packet,
 for your custom messages.
+
+=head1 IMPLEMENTATION
+
+=over 4
+
+=item 1
+
+Create your perl script (such as the example above).
+
+=item 2
+
+Edit snmptrapd.conf so that the default traphandle calls your perl script.
+
+=item 3
+
+Startup snmptrapd and let it do all the OID translations (no -On option) and let it
+do hostname translations (no -n option).
+
+=item 4
+
+Create a trap and check that it has been received and processed
+correctly.
+
+=back
 
 =head1 METHODS
 
@@ -183,7 +216,7 @@ about this packet. An example packet is:
   cisco2611.lon.altinity
   192.168.10.20
   SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
-  SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
+  SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp
   IF-MIB::ifIndex.2 2
   IF-MIB::ifDescr.2 Serial0/0
   IF-MIB::ifType.2 ppp
@@ -209,8 +242,10 @@ originating host.
 =item trapname
 
 Returns the value of the parameter SNMPv2-MIB::snmpTrapOID. In the
-example above, this method would return IF-MIB::linkUp. The .1 is removed,
-but if it was .1.1, this would not be removed.
+example above, this method would return IF-MIB::linkUp. 
+
+If the SNMPv2-MIB::snmpTrapOID is not found, then will return undef.
+This could mean that the MIB for snmpTrapOID has not been loaded.
 
 =item fully_translated
 
@@ -229,7 +264,7 @@ trap above, a Data::Dumper of $trap->data would give:
           'SNMP-COMMUNITY-MIB::snmpTrapAddress' => '192.168.10.20',
           'IF-MIB::ifType' => 'ppp',
           'IF-MIB::ifIndex' => '2',
-          'SNMPv2-MIB::snmpTrapOID' => 'IF-MIB::linkUp.1',
+          'SNMPv2-MIB::snmpTrapOID' => 'IF-MIB::linkUp',
           'IF-MIB::ifDescr' => 'Serial0/0',
           'SNMP-COMMUNITY-MIB::snmpTrapCommunity' => '"public"',
           'SNMPv2-MIB::sysUpTime' => '9:16:47:53.80',
@@ -279,13 +314,18 @@ this would return:
 
 =back
 
-=head1 SEE ALSO
+=head1 REFERENCES
 
-Net-SNMP - http://www.net-snmp.org
+Net-SNMP - http://www.net-snmp.org. This module has been tested on versions 
+5.1.2 and 5.2.1.
 
 =head1 AUTHOR
 
 Ton Voon, E<lt>ton.voon@altinity.comE<gt>
+
+=head1 CREDITS
+
+Thanks to Brand Hilton for documentation suggestions.
 
 =head1 COPYRIGHT AND LICENSE
 

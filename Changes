@@ -1,5 +1,9 @@
 Revision history for Perl extension SNMP::Trapinfo
 
+0.8.2 2006-03-20
+	Updated documentation based on advice from Brand Hilton.
+	$trap->trapname returns undef if no snmpTrapOID found
+
 0.8.1 2006-03-16
 	Net-SNMP 5.2.1 puts extra information around the IP information on line 2
 	Parses this correctly now. ${P2} will return the entire line

@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 25;
+use Test::More tests => 26;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -88,3 +88,14 @@ cmp_ok($trap->expand('Extra data: ${P7} = ${V7}'), "eq", 'Extra data: ifType = e
 cmp_ok($trap->expand('IP: ${P2}'), 'eq', 'IP: UDP: [192.168.10.21]:3656', '${P2} works');
 cmp_ok($trap->expand('Bad - ${P}'), 'eq', 'Bad - (null)', '${P} without a number caught correctly');
 
+$data = <<EOF;
+192.168.144.197
+UDP: [192.168.144.197]:40931
+SNMPv2-SMI::mib-2.1.3.0 0:1:49:29.00
+SNMPv2-SMI::snmpModules.1.1.4.1.0 ISHELF-ARCS-MIB::iShelfTrapGroup.5.0
+ISHELF-SYS-MIB::iShelfSysTrapDbChgOid.0 ISHELF-CARD-MIB::iShelfCardLocation.10112
+ISHELF-SYS-MIB::iShelfSysSystemDateTime.0 Wrong Type (should be OCTET STRING): 27
+EOF
+
+$trap = SNMP::Trapinfo->new(\$data);
+ok( ! defined $trap->trapname, "Trapname not in packet");
