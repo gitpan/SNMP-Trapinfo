@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.8.2';
+our $VERSION = '0.8.3';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -27,14 +27,27 @@ sub new {
 			};
 	$self = bless $self, $class;
 
-	$self->read($data);
-	return $self;
+	return $self->read($data);
 }
 
 sub trapname {
 	my $self = shift;
 	my $trapname = $self->data->{"SNMPv2-MIB::snmpTrapOID"};
 	return $trapname || undef;
+}
+
+sub packet {
+	my $self = shift;
+	if ($_[0] && ref \$_[0] eq "SCALAR") {
+		return $self->{packet} = shift;
+	}
+	my $opts;
+	$opts = shift if (ref $_[0] eq "HASH");
+	$_ = $self->{packet};
+	if ($opts->{hide_passwords}) {
+		s/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "(.*?)"\n/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"\n/;
+	}
+	return $_;
 }
 
 sub expand {
@@ -79,12 +92,13 @@ sub read {
 	my ($self, $data) = @_;
 	if (ref \$data eq "GLOB") {
 		local $/=""; 
-		$self->{packet} = <$data>;
+		$self->{packet} = <$data> || return undef;
 	} elsif (ref \$data eq "REF") {
 		$self->{packet} = $$data;
 	} else {
 		croak "Bad ref";
 	}
+	$self->{packet} =~ s/\n*$//;
 	my @packet = split("\n", $self->{packet});
 	chomp($_ = shift @packet);
 	$self->hostname($_);
@@ -104,6 +118,7 @@ sub read {
 		}
 		$self->data->{"$key"} = $value;
 	}
+	return $self;
 }
 
 sub fully_translated {
@@ -225,6 +240,11 @@ about this packet. An example packet is:
   SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "public"
   SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186
 
+Any trailing linefeeds will be stripped.
+
+Can specify multiple packets - keep calling SNMP::Trapinfo->new(*STDIN). Will receive an undef if 
+there are no more packets to read.
+
 =item SNMP::Trapinfo->new(\$data)
 
 Instead of a filehandle, can specify a scalar reference that holds the packet data.
@@ -252,6 +272,11 @@ This could mean that the MIB for snmpTrapOID has not been loaded.
 Returns 0 if the trapname has more than 1 set of trailing digits
 (a single .\d+ would be removed automatically) - this would mean that a
 MIB is missing. Otherwise returns 1.
+
+=item packet( {hide_passwords => 1} )
+
+Returns a scalar with the full packet, as originally received. If hide_passwords is specified,
+will replace the value of snmpTrapCommunity.0 with 5 asterisks.
 
 =item data
 

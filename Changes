@@ -1,5 +1,11 @@
 Revision history for Perl extension SNMP::Trapinfo
 
+0.8.3 2006-04-06
+	Warning: Trailing linefeeds are removed from $trap->packet. Needed for
+	consistency
+	Can read multiple packets from STDIN
+	Can request to hide sensitive information from packet
+
 0.8.2 2006-03-20
 	Updated documentation based on advice from Brand Hilton.
 	$trap->trapname returns undef if no snmpTrapOID found

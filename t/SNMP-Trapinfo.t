@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 26;
+use Test::More tests => 30;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -32,8 +32,14 @@ SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.20
 SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "public"
 SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186
 
+cisco2620.lon.altinity
+192.168.10.30
+SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
+SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
+IF-MIB::ifIndex.2 12
+IF-MIB::ifDescr.2 Serial0/0
+IF-MIB::ifType.2 ppp
 EOF
-# Need a linefeed at end because no end of file is from the tempfile
 seek ($fh, 0, 0);
 
 my $trap = SNMP::Trapinfo->new(*$fh);
@@ -50,6 +56,32 @@ cmp_ok( $trap->V(5), '==', 2, "Got v5 correctly");
 cmp_ok( $trap->V(8), 'eq', '"PPP LCP Open"', "Got v8 correctly");
 cmp_ok( $trap->expand('Port ${IF-MIB::ifIndex} (${P7}=${V7}) is Up with message ${V8}'), 'eq', 
 	'Port 2 (ifType=ppp) is Up with message "PPP LCP Open"', "Macro expansion as expected");
+
+my $expected = 'cisco2611.lon.altinity
+192.168.10.20
+SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
+SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
+IF-MIB::ifIndex.2 2
+IF-MIB::ifDescr.2 Serial0/0
+IF-MIB::ifType.2 ppp
+SNMPv2-SMI::enterprises.9.2.2.1.1.20.2 "PPP LCP Open"
+SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.20
+SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"
+SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186';
+cmp_ok( $trap->packet( {hide_passwords=>1} ), 'eq', $expected, "Got full packet with passwords hidden");
+
+$trap = SNMP::Trapinfo->new(*$fh);
+cmp_ok( $trap->hostname, 'eq', "cisco2620.lon.altinity", "Host name parsed correctly for subsequent packet");
+$expected = 'cisco2620.lon.altinity
+192.168.10.30
+SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
+SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
+IF-MIB::ifIndex.2 12
+IF-MIB::ifDescr.2 Serial0/0
+IF-MIB::ifType.2 ppp';
+cmp_ok( $trap->packet, 'eq', $expected, "Got full packet without passwords hidden");
+
+ok( ! defined SNMP::Trapinfo->new(*$fh), "No more packets");
 
 eval '$trap = SNMP::Trapinfo->new';
 cmp_ok( $@, 'ne',"", "Complain if no parameters specified for new()");
