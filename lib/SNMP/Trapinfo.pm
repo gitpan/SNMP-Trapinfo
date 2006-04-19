@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.8.3';
+our $VERSION = '0.90';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -338,6 +338,11 @@ this would return:
   Port 2 (ifType=ppp) is Up with message "PPP LCP Open"
 
 =back
+
+=head1 VERSION NUMBERING
+
+After a brief flirtation with 3 digit version numbering, I've changed back to X.YY 
+format as perlmodstyle recommends.
 
 =head1 REFERENCES
 
