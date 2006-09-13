@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.90';
+our $VERSION = '0.91';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -45,7 +45,7 @@ sub packet {
 	$opts = shift if (ref $_[0] eq "HASH");
 	$_ = $self->{packet};
 	if ($opts->{hide_passwords}) {
-		s/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "(.*?)"\n/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"\n/;
+		s/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "(.*?)"/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"/;
 	}
 	return $_;
 }
@@ -53,12 +53,13 @@ sub packet {
 sub expand {
 	my $self = shift;
 	my $string = shift;
+	return "" if ! defined $string;
 	my $key;
-	while ( ($key) = ($string =~ /\${([\w\-:]+)}/) ) {
+	while ( ($key) = ($string =~ /\${([\w\-\.\*:]+)}/) ) {
 		my $newval;
 		my ($action, $line) = $key =~ /^([PV])(\d+)?$/;
 		if ($action && $line) {
-			$newval = $self->$action($line);
+			$newval = $self->$action($line) || "(null)";
 		} elsif ($key eq "DUMP") {
 			my %h = %{$self->data};
 			delete $h{"SNMP-COMMUNITY-MIB::snmpTrapCommunity"};
@@ -68,11 +69,50 @@ sub expand {
 		} elsif ($key eq "HOSTIP") {
 			$newval = $self->hostip;
 		} else {
-			$newval = $self->data->{$key} || "(null)";
+			if ($key =~ /\*/) {
+				$newval = $self->match_key($key) || "(null)";
+			} else {
+				$newval = $self->data->{$key} || "(null)";
+			}
 		}
-		$string =~ s/(\${[\w\-:]+})/$newval/;
+
+		# Must use same match as while loop
+		# Otherwise possible infinite loop
+		# though not sure why (see tests for examples)
+		#$string =~ s/\${$key}/$newval/;
+		$string =~ s/\${([\w\-\.\*:]+)}/$newval/;	
+
 	}
 	return $string;
+}
+
+sub eval {
+	my ($self, $string) = @_;
+	my $code = $self->expand($string);
+	$self->last_eval_string($code);
+	my $rc = eval "$code";
+	if ($@) { 
+		return undef;
+	} else {
+		return $rc ? 1 : 0;
+	}
+}
+
+sub match_key {
+	my ($self, $key) = @_;
+	my @parts = split('\.', $key);
+	POSSIBLE: foreach my $possible (keys %{$self->data}) {
+		my @possible = split('\.', $possible);
+		next unless @possible == @parts;
+		for (my $i=0; $i < @parts; $i++) {
+			next if ($parts[$i] eq "*");
+			if ($parts[$i] ne $possible[$i]) {
+				next POSSIBLE;
+			}
+		}
+		return $self->data->{$possible};
+	}
+	return undef;
 }
 
 sub cleanup_string {
@@ -85,6 +125,8 @@ sub cleanup_string {
 			$string =~ s/\.\d+$//;
 		}
 	}
+	# Remove trailing spaces
+	$string =~ s/ +$//;
 	return $string;
 }
 
@@ -102,15 +144,18 @@ sub read {
 	my @packet = split("\n", $self->{packet});
 	chomp($_ = shift @packet);
 	$self->hostname($_);
-	chomp($_ = shift @packet);
 
+	return undef if (!@packet);	# No IP address given. This is a malformed packet
+
+	chomp($_ = shift @packet);
 	# Extra stuff around the IP packet in Net-SNMP 5.2.1
 	s/^.*\[//;
 	s/\].*$//;
-
 	$self->hostip($_);
+
 	foreach $_ (@packet) {
-		my ($key, $value) = /^([^ ]+) (.+)$/;
+		# Ignore spaces in middle
+		my ($key, $value) = /^([^ ]+) +([^ ].*)$/;
 		next unless $value;
 		$key = $self->cleanup_string($key);
 		if ($key ne "SNMPv2-MIB::snmpTrapOID") {
@@ -135,11 +180,13 @@ sub _get_line {
 	$line--;	# Index begins with 1
 	my @packet = split("\n", $self->{packet});
 	$_ = $packet[$line];
+	return ("", "") if ! defined $_;
 	# Return complete line if requesting P1 or P2
 	if ($line == 0 or $line == 1) {
 		return ($_, undef);
 	}
-	my ($key, undef, $value) = /^([^ ]+)( (.+))?$/;
+	# Trying to ignore spaces in middle
+	my ($key, undef, $value) = /^([^ ]+)( *)(.*?)$/;
 	$key = $self->cleanup_string($key);
 	$value = $self->cleanup_string($value) if $value;
 	return ($key, $value);
@@ -325,6 +372,13 @@ ${IF-MIB::ifType} - Returns the value for the specified parameter.
 
 =item *
 
+${SNMPv2-SMI::enterprises.9.*.2.1.1.20.2} - Returns the value for the specified parameter. The use of the wildcard 
+means any value can be in that dot area. If there are multiple matches, there is no guarantee which one is returned.
+This is only really for MIBs that have variables within the OID - in this particular case, there is a missing MIB file. 
+Multiple *s can be used.
+
+=item *
+
 ${DUMP} - Returns all key, value pairs (stripping out snmpTrapCommunity)
 
 =back
@@ -336,6 +390,29 @@ For the example trap above, if you ran:
 this would return:
 
   Port 2 (ifType=ppp) is Up with message "PPP LCP Open"
+
+=item eval($string)
+
+$string is passed into expand to expand any macros. Then the entire string is eval'd.
+This method is useful for creating SNMP rules, using perl syntax. Will return 1 if true,
+0 if false, or undef if eval failure ($@ will be set with the error).
+
+For the example trap above, if you ran:
+
+  $trap->eval('"${IF-MIB::ifType}" eq "ppp" && ${IF-MIB::ifIndex} < 5');
+
+this would expand to 
+
+  "ppp" eq "ppp" && 2 < 5
+
+and this would return true.
+
+WARNING: Any arbitrary perl code could be executed here, so make sure data passed in is
+authorised.
+
+=item last_eval_string
+
+Returns the last string used in an eval, with all macros expanded. Useful for debugging
 
 =back
 

@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 30;
+use Test::More tests => 73;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -31,6 +31,7 @@ SNMPv2-SMI::enterprises.9.2.2.1.1.20.2 "PPP LCP Open"
 SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.20
 SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "public"
 SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186
+0 0
 
 cisco2620.lon.altinity
 192.168.10.30
@@ -50,12 +51,29 @@ cmp_ok( $trap->hostip, 'eq', "192.168.10.20", "Host ip parsed correctly");
 cmp_ok( $trap->trapname, 'eq', "IF-MIB::linkUp.1", "trapname correct");
 cmp_ok( $trap->fully_translated, '==', 0, "trapname is not fully translated");
 cmp_ok( $trap->data->{"SNMPv2-SMI::enterprises.9.2.2.1.1.20.2"}, 'eq', '"PPP LCP Open"', "Parse spaces correctly");
+cmp_ok( $trap->expand('${SNMPv2-SMI::enterprises.9.2.2.1.1.20.2}'), 'eq', '"PPP LCP Open"', "And can reference it with a macro");
 cmp_ok( $trap->P(3), 'eq', "sysUpTime", "Got p3 correctly");
 cmp_ok( $trap->P(9), 'eq', "snmpTrapAddress", "Got p9 correctly");
 cmp_ok( $trap->V(5), '==', 2, "Got v5 correctly");
 cmp_ok( $trap->V(8), 'eq', '"PPP LCP Open"', "Got v8 correctly");
+    is( $trap->V(13), '', "No V13 - got blank");
+    is( $trap->P(25), '', "No P25 - got blank");
+    is( $trap->V(12), '0', "Got a zero for V correctly");
+    is( $trap->P(12), '0', "Got a zero for P correctly");
 cmp_ok( $trap->expand('Port ${IF-MIB::ifIndex} (${P7}=${V7}) is Up with message ${V8}'), 'eq', 
 	'Port 2 (ifType=ppp) is Up with message "PPP LCP Open"', "Macro expansion as expected");
+cmp_ok( $trap->eval('"${IF-MIB::ifType}" eq "ppp" && ${IF-MIB::ifIndex} < 5'), 
+	"eq", 1, "Got true eval");
+cmp_ok( $trap->last_eval_string, 'eq', '"ppp" eq "ppp" && 2 < 5', "last_eval_string set");
+    ok( ! defined $trap->eval('${IF-MIB::ifType} eq "ppp" && ${IF-MIB::ifIndex} < 5'), "Got eval failure");
+cmp_ok( $trap->last_eval_string, 'eq', 'ppp eq "ppp" && 2 < 5', "last_eval_string set");
+  like( $@, '/Bareword "ppp" not allowed while "strict subs" in use/', "Got eval error in \$@");
+cmp_ok( $trap->eval('"${IF-MIB::ifType}" eq "ppp" && ${IF-MIB::ifIndex} == 5'), 
+	"eq", 0, "Got false eval");
+cmp_ok( $trap->last_eval_string, 'eq', '"ppp" eq "ppp" && 2 == 5', "last_eval_string set");
+cmp_ok( $trap->eval("2"), '==', 1, "Got 1 for true");
+    ok( $trap->eval('${SNMPv2-SMI::enterprises.9.2.2.1.1.20.2} =~ /Open/'), "Can do regexp");
+cmp_ok( $trap->last_eval_string, 'eq', '"PPP LCP Open" =~ /Open/', "last_eval_string set");
 
 my $expected = 'cisco2611.lon.altinity
 192.168.10.20
@@ -67,7 +85,8 @@ IF-MIB::ifType.2 ppp
 SNMPv2-SMI::enterprises.9.2.2.1.1.20.2 "PPP LCP Open"
 SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.20
 SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"
-SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186';
+SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186
+0 0';
 cmp_ok( $trap->packet( {hide_passwords=>1} ), 'eq', $expected, "Got full packet with passwords hidden");
 
 $trap = SNMP::Trapinfo->new(*$fh);
@@ -93,7 +112,9 @@ SNMPv2-MIB::sysUpTime.0 75:22:57:17.87
 SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkDown
 IF-MIB::ifIndex.24 24
 IF-MIB::ifDescr.24 FastEthernet0/24
-IF-MIB::ifType.24 ethernetCsmacd
+IF-MIB::ifType.24   ethernetCsmacd  
+error
+error_with_spaces_at_end     
 SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.21
 SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "public"
 EOF
@@ -105,6 +126,13 @@ $trap = SNMP::Trapinfo->new(\$data);
 cmp_ok( $trap->hostip, 'eq', "192.168.10.21", "Host ip correct");
 cmp_ok( $trap->trapname, 'eq', "IF-MIB::linkDown", "trapname correct");
 cmp_ok( $trap->expand('This IP is ${HOSTIP}'), 'eq', 'This IP is 192.168.10.21', '${HOSTIP} expands correctly');
+    is( $trap->expand('${V55}'), "(null)", 'Expands unavailable V55');
+    is( $trap->expand('${P55}'), "(null)", 'Expands unavailable P55');
+    is( $trap->expand('${P8}'), "error", 'Got P8 with no value');
+    is( $trap->expand('${V8}'), "(null)", 'Got V8 as null');
+    is( $trap->expand('${P9}'), "error_with_spaces_at_end", 'Got P9 with no value (and trailing spaces)');
+    is( $trap->expand('${V9}'), "(null)", 'Got V9 as null');
+    is( $trap->expand('${IF-MIB::ifType}'), "ethernetCsmacd", "Removed spaces in middle and end");
 cmp_ok( $trap->fully_translated, '==', 1, "Trapname is fully translated");
 cmp_ok( $trap->data->{"IF-MIB::ifDescr"}, "eq", "FastEthernet0/24", "Got interface description");
 
@@ -120,6 +148,19 @@ cmp_ok($trap->expand('Extra data: ${P7} = ${V7}'), "eq", 'Extra data: ifType = e
 cmp_ok($trap->expand('IP: ${P2}'), 'eq', 'IP: UDP: [192.168.10.21]:3656', '${P2} works');
 cmp_ok($trap->expand('Bad - ${P}'), 'eq', 'Bad - (null)', '${P} without a number caught correctly');
 
+$expected = 'cisco9999.lon.altinity
+UDP: [192.168.10.21]:3656
+SNMPv2-MIB::sysUpTime.0 75:22:57:17.87
+SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkDown
+IF-MIB::ifIndex.24 24
+IF-MIB::ifDescr.24 FastEthernet0/24
+IF-MIB::ifType.24   ethernetCsmacd  
+error
+error_with_spaces_at_end     
+SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.21
+SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"';
+cmp_ok( $trap->packet( {hide_passwords=>1} ), 'eq', $expected, "Passwords hidden correctly when community string on last line");
+
 $data = <<EOF;
 192.168.144.197
 UDP: [192.168.144.197]:40931
@@ -131,3 +172,61 @@ EOF
 
 $trap = SNMP::Trapinfo->new(\$data);
 ok( ! defined $trap->trapname, "Trapname not in packet");
+
+$data = <<EOF;
+dastardly.altinity.net
+10.243.196.251
+SNMPv2-MIB::sysUpTime.0 119:2:04:40.34
+SNMPv2-MIB::snmpTrapOID.0 CERENT-454-MIB::remoteAlarmIndication
+CERENT-454-MIB::cerent454NodeTime.0 20060814114937D
+CERENT-454-MIB::cerent454AlarmState.9216.remoteAlarmIndication notAlarmedNonServiceAffecting
+CERENT-454-MIB::cerent454AlarmObjectType.9216.remoteAlarmIndication ds1
+CERENT-454-MIB::cerent454AlarmObjectIndex.9216.remoteAlarmIndication 9216
+CERENT-454-MIB::cerent454AlarmSlotNumber.9216.remoteAlarmIndication 2
+CERENT-454-MIB::cerent454AlarmPortNumber.9216.remoteAlarmIndication port36
+CERENT-454-MIB::cerent454AlarmLineNumber.9216.remoteAlarmIndication 0
+CERENT-454-MIB::cerent454AlarmObjectName.9216.remoteAlarmIndication DS1-2-36-7
+SNMP-COMMUNITY-MIB::snmpTrapAddress.0 216.243.196.251
+EOF
+
+$trap = SNMP::Trapinfo->new(\$data);
+
+cmp_ok( $trap->expand('Check for missing parameter ${ISHELF-SYS-MIB::iShelfSysTrapDbChgOid}'), "eq",
+	"Check for missing parameter (null)", 'Bad macros ignore');
+cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmState.*.remoteAlarmIndication}" ne "cleared"'),
+	"eq", 1, "Correct expansion with wildcard");
+cmp_ok( $trap->last_eval_string, 'eq', '"notAlarmedNonServiceAffecting" ne "cleared"', "Expanded correctly");
+cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmState.*.remoteAlarmIndication}" eq "cleared"'),
+	"eq", 0, "Correct expansion with wildcard 2");
+cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmState.*.remoteAlarmIndication}" eq "notAlarmedNonServiceAffecting"'),
+	"eq", 1, "Correct expansion with wildcard 3");
+  isnt( $trap->match_key('CERENT-454-MIB::cerent454AlarmState.*.remoteAlarmIndication43'), "", "Should not match anything");
+  isnt( $trap->match_key('CERENT-454-MIB::cerent454AlarmStaterubbish.*.remoteAlarmIndication'), "", "Should not match anything");
+  isnt( $trap->match_key('CERENT-454-MIB::cerent454AlarmState.b*b.remoteAlarmIndication'), "", "Should not match anything");
+  isnt( $trap->match_key('CERENT-454-MIB::cerent454AlarmState.*'), "", "Need to have same number of parts");
+cmp_ok( $trap->match_key('CERENT-454-MIB::cerent454AlarmState.*.*'), "eq", "notAlarmedNonServiceAffecting", "Multiple *s work");
+cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmPortNumber.*.remoteAlarmIndication}" =~ /port/'),
+	"eq", 1, "Got regexp");
+cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmPortNumber.*.remoteAlarmIndication}" =~ /stuff/'),
+	"eq", 0, "Failed regexp");
+  isnt( $trap->eval('"${CERENT-454-MIB::cerent454AlarmPortNumber.*.remoteAlarmIndication}" !=!~ /st/x'),
+	"", "Syntax error");
+    is( $trap->expand(""), "", "Empty string expand returns nothing");
+    is( $trap->expand(), "", "Empty value expand returns nothing too");
+    is( $trap->expand(0), "0", "Zero value expand returns zero");
+    is( $trap->eval('"${nonexistent}" =~ /stuff/'), "0", "Empty regexp - no warnings propagated");
+    is( $trap->last_eval_string, '"(null)" =~ /stuff/', "Expanded correctly");
+
+# Infinite loop tests
+  diag "Doing infinite tests";
+    is( $trap->eval('"${CERENT-454-MIB::cerent454AlarmPortNumber*}" eq "infinite"'), 0, "No infinite loop! - phew");
+    
+
+
+$data = <<EOF;
+dastardly.altinity.net
+EOF
+
+$trap = SNMP::Trapinfo->new(\$data);
+ok( ! defined $trap, "Bad packet (missing 2nd line)");
+

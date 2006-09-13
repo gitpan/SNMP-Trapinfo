@@ -1,5 +1,14 @@
 Revision history for Perl extension SNMP::Trapinfo
 
+0.91  2006-09-13
+	Small fix for regexp for hide_passwords
+	Fix to allow . in the macro names
+	Allow * in the macro names as a wildcard for a value between dots
+	New method: eval. Expands string and then evals it. Useful for perl-syntax rules
+
+0.90  2006-04-19
+	Version number format changed for CPAN
+
 0.8.3 2006-04-06
 	Warning: Trailing linefeeds are removed from $trap->packet. Needed for
 	consistency
