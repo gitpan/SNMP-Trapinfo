@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 73;
+use Test::More tests => 82;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -16,6 +16,9 @@ BEGIN { use_ok('SNMP::Trapinfo') };
 use strict;
 use warnings;
 use File::Temp qw(tempfile);
+use Safe;
+
+my $result;
 
 my $fh = tempfile();
 
@@ -230,3 +233,37 @@ EOF
 $trap = SNMP::Trapinfo->new(\$data);
 ok( ! defined $trap, "Bad packet (missing 2nd line)");
 
+
+
+##########
+# Test Safe eval's
+
+#####
+my $unsafe_opstr = <<EOF;
+	open(FILE,"< /etc/passwd") or die("Can't read file /etc/passwd: $!\n");
+	close(FILE);
+EOF
+
+#####
+my $safe_opstr = <<EOF;
+	print "";
+	0;
+EOF
+
+$data = <<EOF;
+dastardly.altinity.net
+10.243.196.251
+SNMPv2-MIB::sysUpTime.0 119:2:04:40.34
+EOF
+$trap = SNMP::Trapinfo->new(\$data);
+ok( defined $trap, "Failed to create simple trap object");
+
+
+is ( eval "$unsafe_opstr", 1, "EVAL of unsafe op succeeded" );
+ok ( defined $trap->eval($safe_opstr), "Allow safe eval" );
+is ( $trap->eval($unsafe_opstr), undef, "Unsafe eval denied");
+like( $@, "/trapped by operation mask/", "Correct error");
+ok( defined $trap->eval("1+2*3/4-5"), "Basic maths okay");
+ok( defined $trap->eval('"${P1}" =~ /altinity/'), "regexp okay");
+ok( defined $trap->eval("(1 > 73) && (5 < 100) || (6 != 5) and ('here' ne 'there') or ('now' lt 'yesterday')"), "comparison operators okay");
+is( $trap->eval("system('/usr/bin/cat /etc/passwd')"), undef, "system call correctly blocked");

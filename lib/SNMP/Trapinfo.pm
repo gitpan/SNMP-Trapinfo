@@ -4,8 +4,9 @@ use 5.008004;
 use strict;
 use warnings;
 use Carp;
+use Safe;		# Safe module, creates a compartment for eval's and tests for disabled commands
 
-our $VERSION = '0.91';
+our $VERSION = '0.92';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -86,11 +87,23 @@ sub expand {
 	return $string;
 }
 
+# Initialise the Safe compartment once
+# Operators can be listed as follows
+# perl -MOpcode=opdump -e 'opdump'
+#
+# http://search.cpan.org/~nwclark/perl-5.8.8/ext/Opcode/Opcode.pm
+#
+# We want to allow // m// s/// && || ! !~ != >= > == < <= =~ lt gt le ge ne eq not and or + - % * x .
+#
+my $cmp = new Safe;
+$cmp->permit_only( qw( :base_core :base_mem :base_loop print sprintf prtf padsv padav padhv padany  ) );
+
 sub eval {
 	my ($self, $string) = @_;
 	my $code = $self->expand($string);
 	$self->last_eval_string($code);
-	my $rc = eval "$code";
+
+	my $rc = $cmp->reval("$code", 1);	# ($code to run, 1 for 'use strict;')
 	if ($@) { 
 		return undef;
 	} else {
@@ -210,7 +223,7 @@ __END__
 
 =head1 NAME
 
-SNMP::Trapinfo - Reading an SNMP trap from Net-SNMP's snmptrapd
+SNMP::Trapinfo - Read and process an SNMP trap from Net-SNMP's snmptrapd
 
 =head1 SYNOPSIS
 
@@ -232,15 +245,27 @@ SNMP::Trapinfo - Reading an SNMP trap from Net-SNMP's snmptrapd
     # not expected trap
   }
 
+  # Do some complex evaluation of the packet
+  my $result = $trap->eval('"${IF-MIB::ifType}" eq "ppp" && ${IF-MIB::ifIndex} < 5');
+  if ($result) {
+    print "Got a trap for ppp where index is less than 5", $/;
+  } elsif ($result == 0) {
+    print "Packet not desired", $/;
+  } else {
+    print "Error evaluating: " . $trap->last_eval_string . "; result: $@", $/;
+  }
+
 =head1 DESCRIPTION
 
 This module allows the user to get to the useful parts of an snmptrapd
 packet, as provided by the Net-SNMP software (http://www.net-snmp.org). 
-You can then take whatever action with the packet, such as sending
-an email, post an IM or passing it to Nagios (http://www.nagios.org).
+You can evaluate the packet to match whatever rules you define and then 
+take whatever action with the packet, such as sending an email, post an 
+IM or submit it as a passive check to Nagios (http://www.nagios.org).
 
-The most useful method is expand, which evaluates macros based on the packet,
-for your custom messages.
+Rules are defined as little perl snippets of code - run using the eval method. 
+You use macros to pull out specific bits of the trap to then evaluate against. 
+See the expand method for the macro definitions.
 
 =head1 IMPLEMENTATION
 
@@ -405,10 +430,10 @@ this would expand to
 
   "ppp" eq "ppp" && 2 < 5
 
-and this would return true.
+and this would return 1.
 
-WARNING: Any arbitrary perl code could be executed here, so make sure data passed in is
-authorised.
+The perl code executed is run in a Safe compartment so only numeric comparisons or regexps 
+are allowed. Other calls, such as open or system, will return undef with the error in $@
 
 =item last_eval_string
 
@@ -432,7 +457,7 @@ Ton Voon, E<lt>ton.voon@altinity.comE<gt>
 
 =head1 CREDITS
 
-Thanks to Brand Hilton for documentation suggestions.
+Thanks to Brand Hilton for documentation suggestions and Rob Moss for integrating Safe.pm.
 
 =head1 COPYRIGHT AND LICENSE
 

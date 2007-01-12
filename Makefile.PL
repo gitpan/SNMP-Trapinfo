@@ -5,7 +5,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'SNMP::Trapinfo',
     VERSION_FROM      => 'lib/SNMP/Trapinfo.pm', # finds $VERSION
-    PREREQ_PM         => { File::Temp => 0.05 }, # e.g., Module::Name => 1.1
+    PREREQ_PM         => { File::Temp => 0.05, Safe => 2.11 }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/SNMP/Trapinfo.pm', # retrieve abstract from module
        AUTHOR         => 'Ton Voon <ton.voon@altinity.com>') : ()),
