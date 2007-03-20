@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 82;
+use Test::More tests => 93;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -35,7 +35,7 @@ SNMP-COMMUNITY-MIB::snmpTrapAddress.0 192.168.10.20
 SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "public"
 SNMPv2-MIB::snmpTrapEnterprise.0 SNMPv2-SMI::enterprises.9.1.186
 0 0
-
+#---next trap---#
 cisco2620.lon.altinity
 192.168.10.30
 SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
@@ -43,6 +43,11 @@ SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
 IF-MIB::ifIndex.2 12
 IF-MIB::ifDescr.2 Serial0/0
 IF-MIB::ifType.2 ppp
+DUMMY::THING.0 With some data over multiple
+lines for me
+DUMMY::ANOTHER Again, but this time end with linefeed
+
+DUMMY::YIKES prove this is read
 EOF
 seek ($fh, 0, 0);
 
@@ -94,13 +99,34 @@ cmp_ok( $trap->packet( {hide_passwords=>1} ), 'eq', $expected, "Got full packet 
 
 $trap = SNMP::Trapinfo->new(*$fh);
 cmp_ok( $trap->hostname, 'eq', "cisco2620.lon.altinity", "Host name parsed correctly for subsequent packet");
+is( $trap->expand('${DUMMY::THING}'), "With some data over multiple", "Able to read values over multiple lines" );
+is( $trap->expand('${P8}'), "THING", "Parameter name right");
+is( $trap->expand('${V8}'), "With some data over multiple", "Right value too");
+TODO: {
+	# Need to investigate RFC to see if this is true
+	local $TODO = "Possibly should get stricter with key format - look for ':'?";
+	is( $trap->expand('${P9}'), "(null)", "No P9 because wrong format");
+}
+is( $trap->expand('${DUMMY::ANOTHER}'), "Again, but this time end with linefeed", "Able to read value when terminated with linefeed");
+is( $trap->expand('${P10}'), "ANOTHER", "Parameter name right");
+is( $trap->expand('${V10}'), "Again, but this time end with linefeed", "Right value too");
+is( $trap->expand('${P11} ${V11}'), "(null) (null)", "No value set as format wrong");
+is( $trap->expand('${DUMMY::YIKES}'), "prove this is read", "Continues reading");
+is( $trap->expand('${P12}'), "YIKES", "Parameter name right");
+is( $trap->expand('${V12}'), "prove this is read", "Right value too");
+
 $expected = 'cisco2620.lon.altinity
 192.168.10.30
 SNMPv2-MIB::sysUpTime.0 9:16:47:53.80
 SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkUp.1
 IF-MIB::ifIndex.2 12
 IF-MIB::ifDescr.2 Serial0/0
-IF-MIB::ifType.2 ppp';
+IF-MIB::ifType.2 ppp
+DUMMY::THING.0 With some data over multiple
+lines for me
+DUMMY::ANOTHER Again, but this time end with linefeed
+
+DUMMY::YIKES prove this is read';
 cmp_ok( $trap->packet, 'eq', $expected, "Got full packet without passwords hidden");
 
 ok( ! defined SNMP::Trapinfo->new(*$fh), "No more packets");
@@ -131,9 +157,9 @@ cmp_ok( $trap->trapname, 'eq', "IF-MIB::linkDown", "trapname correct");
 cmp_ok( $trap->expand('This IP is ${HOSTIP}'), 'eq', 'This IP is 192.168.10.21', '${HOSTIP} expands correctly');
     is( $trap->expand('${V55}'), "(null)", 'Expands unavailable V55');
     is( $trap->expand('${P55}'), "(null)", 'Expands unavailable P55');
-    is( $trap->expand('${P8}'), "error", 'Got P8 with no value');
+    is( $trap->expand('${P8}'), "(null)", 'Got P8 with no value');
     is( $trap->expand('${V8}'), "(null)", 'Got V8 as null');
-    is( $trap->expand('${P9}'), "error_with_spaces_at_end", 'Got P9 with no value (and trailing spaces)');
+    is( $trap->expand('${P9}'), "(null)", 'Got P9 with no value (and trailing spaces)');
     is( $trap->expand('${V9}'), "(null)", 'Got V9 as null');
     is( $trap->expand('${IF-MIB::ifType}'), "ethernetCsmacd", "Removed spaces in middle and end");
 cmp_ok( $trap->fully_translated, '==', 1, "Trapname is fully translated");

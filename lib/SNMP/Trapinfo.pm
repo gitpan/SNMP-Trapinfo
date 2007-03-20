@@ -6,7 +6,7 @@ use warnings;
 use Carp;
 use Safe;		# Safe module, creates a compartment for eval's and tests for disabled commands
 
-our $VERSION = '0.92';
+our $VERSION = '1.0';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -24,7 +24,9 @@ sub new {
 	my ($class, $data) = @_;
 	croak "Must specify data source (either GLOB or scalar ref)" unless $data;
 	my $self = { 
-			data => {}
+			data => {},
+			P => [],
+			V => [],
 			};
 	$self = bless $self, $class;
 
@@ -146,8 +148,9 @@ sub cleanup_string {
 sub read {
 	my ($self, $data) = @_;
 	if (ref \$data eq "GLOB") {
-		local $/=""; 
+		local $/="#---next trap---#\n"; 
 		$self->{packet} = <$data> || return undef;
+		chomp($self->{packet});
 	} elsif (ref \$data eq "REF") {
 		$self->{packet} = $$data;
 	} else {
@@ -157,24 +160,32 @@ sub read {
 	my @packet = split("\n", $self->{packet});
 	chomp($_ = shift @packet);
 	$self->hostname($_);
+	$self->{P}->[0] = $_;
 
 	return undef if (!@packet);	# No IP address given. This is a malformed packet
 
 	chomp($_ = shift @packet);
+	$self->{P}->[1] = $_;
 	# Extra stuff around the IP packet in Net-SNMP 5.2.1
 	s/^.*\[//;
 	s/\].*$//;
 	$self->hostip($_);
 
+	my $i = 1;	# Start at 1 because want to increment array at beginning because of next
 	foreach $_ (@packet) {
+		$i++;
 		# Ignore spaces in middle
 		my ($key, $value) = /^([^ ]+) +([^ ].*)$/;
-		next unless $value;
+		# If syntax is wrong, ignore this line
+		next unless defined $key;
 		$key = $self->cleanup_string($key);
 		if ($key ne "SNMPv2-MIB::snmpTrapOID") {
 			$value = $self->cleanup_string($value);
 		}
-		$self->data->{"$key"} = $value;
+		$self->data->{$key} = $value;
+		$key =~ s/^[^:]+:://;
+		$self->{P}->[$i] = $key;
+		$self->{V}->[$i] = $value;
 	}
 	return $self;
 }
@@ -188,34 +199,18 @@ sub fully_translated {
 	}
 }
 
-sub _get_line {
-	my ($self, $line) = @_;
-	$line--;	# Index begins with 1
-	my @packet = split("\n", $self->{packet});
-	$_ = $packet[$line];
-	return ("", "") if ! defined $_;
-	# Return complete line if requesting P1 or P2
-	if ($line == 0 or $line == 1) {
-		return ($_, undef);
-	}
-	# Trying to ignore spaces in middle
-	my ($key, undef, $value) = /^([^ ]+)( *)(.*?)$/;
-	$key = $self->cleanup_string($key);
-	$value = $self->cleanup_string($value) if $value;
-	return ($key, $value);
-}
-		
 sub P {
 	my ($self, $line) = @_;
-	my ($key, $value) = $self->_get_line($line);
-	$key =~ s/^[^:]+:://;
-	return $key;
+	$_ = $self->{P}->[--$line];
+	$_ = "" unless defined $_;
+	return $_;
 }
 
 sub V {
 	my ($self, $line) = @_;
-	my ($key, $value) = $self->_get_line($line);
-	return $value;
+	$_ = $self->{V}->[--$line];
+	$_ = "" unless defined $_;
+	return $_;
 }
 
 1;
@@ -314,8 +309,12 @@ about this packet. An example packet is:
 
 Any trailing linefeeds will be stripped.
 
-Can specify multiple packets - keep calling SNMP::Trapinfo->new(*STDIN). Will receive an undef if 
-there are no more packets to read.
+Apart from the first two lines, expects each line to be of the format: key value. If not, then will silently ignore
+the line.
+
+If you want to use multiple packets within a stream, you have to put a marker in between
+each trap: "#---next trap---#\n". Then call SNMP::Trapinfo->new(*STDIN) again. Will receive an undef if 
+there are no more packets to read or the packet is malformed (such as no IP on the 2nd line).
 
 =item SNMP::Trapinfo->new(\$data)
 
