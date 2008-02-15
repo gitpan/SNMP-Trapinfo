@@ -6,7 +6,7 @@ use warnings;
 use Carp;
 use Safe;		# Safe module, creates a compartment for eval's and tests for disabled commands
 
-our $VERSION = '1.0';
+our $VERSION = '1.01';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -98,7 +98,7 @@ sub expand {
 # We want to allow // m// s/// && || ! !~ != >= > == < <= =~ lt gt le ge ne eq not and or + - % * x .
 #
 my $cmp = new Safe;
-$cmp->permit_only( qw( :base_core :base_mem :base_loop print sprintf prtf padsv padav padhv padany  ) );
+$cmp->permit_only( qw( :base_core :base_mem :base_loop print sprintf prtf padsv padav padhv padany localtime ) );
 
 sub eval {
 	my ($self, $string) = @_;

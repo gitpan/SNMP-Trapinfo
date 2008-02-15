@@ -1,6 +1,9 @@
 Revision history for Perl extension SNMP::Trapinfo
 
-1.0   ??
+1.01  2008-02-15
+	Add access to 'localtime()' function
+
+1.0   2007-03-20
 	If there is more than one trap, you have to use the marker "#---next trap---#\n" between them -
 	this does not affect data from snmptrapd as that only sends one trap at a time.
 	The marker is required because some traps have embedded linefeeds in the value. This module will

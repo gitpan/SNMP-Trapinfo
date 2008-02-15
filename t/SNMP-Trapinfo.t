@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 93;
+use Test::More tests => 97;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -293,3 +293,24 @@ ok( defined $trap->eval("1+2*3/4-5"), "Basic maths okay");
 ok( defined $trap->eval('"${P1}" =~ /altinity/'), "regexp okay");
 ok( defined $trap->eval("(1 > 73) && (5 < 100) || (6 != 5) and ('here' ne 'there') or ('now' lt 'yesterday')"), "comparison operators okay");
 is( $trap->eval("system('/usr/bin/cat /etc/passwd')"), undef, "system call correctly blocked");
+ok ( defined $trap->eval("localtime()"), "Access to timelocal OK" );
+
+$data = <<EOF;
+10.12.14.16
+10.12.14.16
+UDP: [10.12.14.16]:12039
+DISMAN-EVENT-MIB::sysUpTimeInstance 180:5:01:15.28
+SNMPv2-MIB::snmpTrapOID.0 JUNIPER-IVE-MIB::logMessageTrap
+JUNIPER-IVE-MIB::logID "SYS12345"
+JUNIPER-IVE-MIB::logType "critical"
+JUNIPER-IVE-MIB::logDescription "critical - System()[] - 2000/01/01 01:01:01 - Sending iveLogNearlyFull SNMP trap to 10.12.14.16:162"
+EOF
+$trap = SNMP::Trapinfo->new(\$data);
+ok( defined $trap, "Failed to create trap object");
+is( $trap->expand('${TRAPNAME}'), "JUNIPER-IVE-MIB::logMessageTrap", "Trapname match");
+
+my $check= <<'EOF';
+"${TRAPNAME}" eq "JUNIPER-IVE-MIB::logMessageTrap" && ${JUNIPER-IVE-MIB::logType} eq "critical"
+EOF
+
+ok ( defined($trap->eval("$check")), "EVAL of JUNIPER check succeeded" );
