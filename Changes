@@ -1,5 +1,10 @@
 Revision history for Perl extension SNMP::Trapinfo
 
+1.02  2010-09-06
+    Added test case for Net-SNMP 5.4.2.1, which has IP in the form: 
+      UDP: [10.11.12.13]:4129->[10.10.10.10]
+	Assign copyright to Opsera
+
 1.01  2008-02-15
 	Add access to 'localtime()' function
 

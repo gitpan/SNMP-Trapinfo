@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 97;
+use Test::More tests => 99;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -314,3 +314,19 @@ my $check= <<'EOF';
 EOF
 
 ok ( defined($trap->eval("$check")), "EVAL of JUNIPER check succeeded" );
+
+$data = <<EOF;
+cisco9999.lon.altinity
+UDP: [192.168.10.21]:3656->[10.10.10.10]
+SNMPv2-MIB::sysUpTime.0 75:22:57:17.87
+SNMPv2-MIB::snmpTrapOID.0 IF-MIB::linkDown
+IF-MIB::ifIndex.24 24
+IF-MIB::ifDescr.24 FastEthernet0/24
+IF-MIB::ifType.24   ethernetCsmacd  
+EOF
+
+eval '$trap = SNMP::Trapinfo->new($data)';
+like( $@, '/Bad ref/', "Complain if bad parameters for new()");
+
+$trap = SNMP::Trapinfo->new(\$data);
+cmp_ok( $trap->hostip, 'eq', "192.168.10.21", "Host ip correct");

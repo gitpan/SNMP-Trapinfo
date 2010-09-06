@@ -6,7 +6,7 @@ use warnings;
 use Carp;
 use Safe;		# Safe module, creates a compartment for eval's and tests for disabled commands
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -167,7 +167,7 @@ sub read {
 	chomp($_ = shift @packet);
 	$self->{P}->[1] = $_;
 	# Extra stuff around the IP packet in Net-SNMP 5.2.1
-	s/^.*\[//;
+	s/^.*?\[//;
 	s/\].*$//;
 	$self->hostip($_);
 
@@ -452,7 +452,7 @@ Net-SNMP - http://www.net-snmp.org. This module has been tested on versions
 
 =head1 AUTHOR
 
-Ton Voon, E<lt>ton.voon@altinity.comE<gt>
+Ton Voon, E<lt>ton.voon@opsera.comE<gt>
 
 =head1 CREDITS
 
@@ -460,7 +460,7 @@ Thanks to Brand Hilton for documentation suggestions and Rob Moss for integratin
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2006 by Altinity Limited
+Copyright (C) 2006-2008 Opsera Limited. All rights reserved
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
