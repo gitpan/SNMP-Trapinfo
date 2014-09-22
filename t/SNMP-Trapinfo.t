@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More tests => 99;
+use Test::More tests => 100;
 BEGIN { use_ok('SNMP::Trapinfo') };
 
 #########################
@@ -216,9 +216,10 @@ CERENT-454-MIB::cerent454AlarmPortNumber.9216.remoteAlarmIndication port36
 CERENT-454-MIB::cerent454AlarmLineNumber.9216.remoteAlarmIndication 0
 CERENT-454-MIB::cerent454AlarmObjectName.9216.remoteAlarmIndication DS1-2-36-7
 SNMP-COMMUNITY-MIB::snmpTrapAddress.0 216.243.196.251
+SNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "willbehidden"
 EOF
 
-$trap = SNMP::Trapinfo->new(\$data);
+$trap = SNMP::Trapinfo->new(\$data, { hide_passwords => 1 } );
 
 cmp_ok( $trap->expand('Check for missing parameter ${ISHELF-SYS-MIB::iShelfSysTrapDbChgOid}'), "eq",
 	"Check for missing parameter (null)", 'Bad macros ignore');
@@ -245,6 +246,7 @@ cmp_ok( $trap->eval('"${CERENT-454-MIB::cerent454AlarmPortNumber.*.remoteAlarmIn
     is( $trap->expand(0), "0", "Zero value expand returns zero");
     is( $trap->eval('"${nonexistent}" =~ /stuff/'), "0", "Empty regexp - no warnings propagated");
     is( $trap->last_eval_string, '"(null)" =~ /stuff/', "Expanded correctly");
+    is( $trap->expand('${SNMP-COMMUNITY-MIB::snmpTrapCommunity}'), '"*****"', "Password hidden on input");
 
 # Infinite loop tests
   diag "Doing infinite tests";

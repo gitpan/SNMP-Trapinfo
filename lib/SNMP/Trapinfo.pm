@@ -6,7 +6,7 @@ use warnings;
 use Carp;
 use Safe;		# Safe module, creates a compartment for eval's and tests for disabled commands
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 sub AUTOLOAD {
         my $self = shift;
@@ -21,7 +21,7 @@ sub AUTOLOAD {
 }
 
 sub new {
-	my ($class, $data) = @_;
+	my ($class, $data, $opts) = @_;
 	croak "Must specify data source (either GLOB or scalar ref)" unless $data;
 	my $self = { 
 			data => {},
@@ -30,7 +30,7 @@ sub new {
 			};
 	$self = bless $self, $class;
 
-	return $self->read($data);
+	return $self->read($data, $opts);
 }
 
 sub trapname {
@@ -48,9 +48,15 @@ sub packet {
 	$opts = shift if (ref $_[0] eq "HASH");
 	$_ = $self->{packet};
 	if ($opts->{hide_passwords}) {
-		s/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "(.*?)"/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"/;
+		$_ = $self->_hide_passwords( $_ );
 	}
 	return $_;
+}
+
+sub _hide_passwords {
+    my ($self, $string) = @_;
+    $string =~ s/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "(.*?)"/\nSNMP-COMMUNITY-MIB::snmpTrapCommunity.0 "*****"/;
+    return $string;
 }
 
 sub expand {
@@ -98,7 +104,7 @@ sub expand {
 # We want to allow // m// s/// && || ! !~ != >= > == < <= =~ lt gt le ge ne eq not and or + - % * x .
 #
 my $cmp = new Safe;
-$cmp->permit_only( qw( :base_core :base_mem :base_loop print sprintf prtf padsv padav padhv padany localtime ) );
+$cmp->permit_only( qw( :base_core :base_mem :base_loop print sprintf prtf padsv padav padhv padany localtime rv2gv ) );
 
 sub eval {
 	my ($self, $string) = @_;
@@ -146,7 +152,7 @@ sub cleanup_string {
 }
 
 sub read {
-	my ($self, $data) = @_;
+	my ($self, $data, $opts) = @_;
 	if (ref \$data eq "GLOB") {
 		local $/="#---next trap---#\n"; 
 		$self->{packet} = <$data> || return undef;
@@ -155,6 +161,9 @@ sub read {
 		$self->{packet} = $$data;
 	} else {
 		croak "Bad ref";
+	}
+	if ($opts->{hide_passwords}) {
+		$self->{packet} = $self->_hide_passwords( $self->{packet} );
 	}
 	$self->{packet} =~ s/\n*$//;
 	my @packet = split("\n", $self->{packet});
@@ -316,9 +325,10 @@ If you want to use multiple packets within a stream, you have to put a marker in
 each trap: "#---next trap---#\n". Then call SNMP::Trapinfo->new(*STDIN) again. Will receive an undef if 
 there are no more packets to read or the packet is malformed (such as no IP on the 2nd line).
 
-=item SNMP::Trapinfo->new(\$data)
+=item SNMP::Trapinfo->new(\$data, $opts)
 
-Instead of a filehandle, can specify a scalar reference that holds the packet data.
+Instead of a filehandle, can specify a scalar reference that holds the packet data. If $opts->{hide_passwords}, will
+convert community strings values to be "*****"
 
 =item hostname
 
@@ -452,7 +462,7 @@ Net-SNMP - http://www.net-snmp.org. This module has been tested on versions
 
 =head1 AUTHOR
 
-Ton Voon, E<lt>ton.voon@opsera.comE<gt>
+Ton Voon, E<lt>ton.voon@opsview.comE<gt>
 
 =head1 CREDITS
 
@@ -460,7 +470,7 @@ Thanks to Brand Hilton for documentation suggestions and Rob Moss for integratin
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2006-2008 Opsera Limited. All rights reserved
+Copyright (C) 2006-2014 Opsview Limited. All rights reserved
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,

@@ -1,5 +1,9 @@
 Revision history for Perl extension SNMP::Trapinfo
 
+1.03 2014-09-22
+    Added option to hide passwords on read of the packet
+    Added rv2gv in Safe compartment, which is needed from perl 5.18 onwards
+
 1.02  2010-09-06
     Added test case for Net-SNMP 5.4.2.1, which has IP in the form: 
       UDP: [10.11.12.13]:4129->[10.10.10.10]
